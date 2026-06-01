@@ -353,7 +353,7 @@
     /*
       Cuando alguien se une, sube audio o elimina algo, aparece
       una notificación breve en la esquina inferior derecha.
-      Son mensajes efímeros: desaparecen solos después de 3 segundos.
+     desaparecen solos después de 3 segundos.
     */
     #notifications {
       position: fixed;
@@ -382,8 +382,7 @@
     /* ── Diálogo de conexión ──────────────────────────── */
     /*
       Al abrir la página, pedimos el nombre y la URL del servidor.
-      Esto permite que el mismo cliente sirva para diferentes
-      instalaciones/sesiones.
+      
     */
     #connect-dialog {
       position: fixed;

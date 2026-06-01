@@ -17,7 +17,7 @@ const TRACK_COLORS    = [
 //  appState es el espejo local del estado del servidor.
 //  Solo se modifica cuando llegan mensajes del servidor
 //  (incluidos los propios, que el servidor reenvía a todos).
-//  Esto garantiza que todos los clientes estén sincronizados.
+//  Esto garantiza que todos los usuarixs estén sincronizados.
 // ══════════════════════════════════════════════════════════
 const appState = {
   tracks: [],
@@ -37,8 +37,8 @@ let myInfo = null;  // { id, name, color }
 const audioBuffers = new Map();
 
 // Otros participantes y sus cursores
-const remoteCursors = new Map();  // clientId → { beat, element }
-const remoteClients = new Map();  // clientId → { id, name, color }
+const remoteCursors = new Map();  // userId → { beat, element }
+const remoteUsers = new Map();  // userId → { id, name, color }
 
 let nextLocalTrackId = 1000; // IDs locales temporales antes de confirmar con servidor
 let nextLocalClipId  = 1000;
@@ -131,8 +131,8 @@ async function handleServerMessage(msg) {
       myInfo = msg.you;
 
       // Reconstruir la lista de participantes conocidos
-      for (const c of msg.clients) {
-        remoteClients.set(c.id, c);
+      for (const c of msg.users) {
+        remoteUsers.set(c.id, c);
       }
 
       // Aplicar BPM
@@ -163,22 +163,22 @@ async function handleServerMessage(msg) {
     }
 
     // ── Nuevo participante ───────────────────────────────
-    case 'CLIENT_JOINED': {
-      remoteClients.set(msg.client.id, msg.client);
+    case 'USER_JOINED': {
+      remoteUsers.set(msg.user.id, msg.user);
       updateParticipants();
-      notify(`→ ${msg.client.name} se unió`, msg.client.color);
+      notify(`→ ${msg.user.name} se unió`, msg.user.color);
       break;
     }
 
     // ── Participante se fue ──────────────────────────────
-    case 'CLIENT_LEFT': {
-      remoteClients.delete(msg.client.id);
+    case 'USER_LEFT': {
+      remoteUsers.delete(msg.user.id);
       // Eliminar su cursor de la línea temporal
-      const cursor = remoteCursors.get(msg.client.id);
+      const cursor = remoteCursors.get(msg.user.id);
       if (cursor && cursor.element) cursor.element.remove();
-      remoteCursors.delete(msg.client.id);
+      remoteCursors.delete(msg.user.id);
       updateParticipants();
-      notify(`← ${msg.client.name} salió`, '#888');
+      notify(`← ${msg.user.name} salió`, '#888');
       break;
     }
 
@@ -188,7 +188,7 @@ async function handleServerMessage(msg) {
       await initTrackAudio(msg.track);
       renderAll();
       if (msg.from !== myInfo?.id) {
-        const creator = remoteClients.get(msg.from);
+        const creator = remoteUsers.get(msg.from);
         notify(`♩ ${creator?.name || '?'} añadió "${msg.track.name}"`, msg.track.color);
       }
       break;
@@ -225,7 +225,7 @@ async function handleServerMessage(msg) {
       renderTrackRows();
       updateStatusBar();
       if (msg.from !== myInfo?.id) {
-        const creator = remoteClients.get(msg.from);
+        const creator = remoteUsers.get(msg.from);
         notify(`♪ ${creator?.name || '?'} subió "${msg.clip.name}"`, TRACK_COLORS[msg.from % TRACK_COLORS.length]);
       }
       break;
@@ -276,10 +276,19 @@ async function handleServerMessage(msg) {
     case 'TRANSPORT': {
       // Opcional: sincronizar play/stop con otros participantes
       // Por ahora solo notificamos, sin forzar reproducción
-      const creator = remoteClients.get(msg.from);
+      const creator = remoteUsers.get(msg.from);
       if (msg.from !== myInfo?.id) {
         notify(`${creator?.name || '?'} ${msg.action === 'play' ? '▶' : '■'}`, '#888');
       }
+      break;
+    }
+
+    // ── Nombre/color de participante actualizado ─────────
+    case 'USER_UPDATED': {
+      const c = msg.user;
+      if (myInfo && c.id === myInfo.id) myInfo = { ...myInfo, ...c };
+      if (remoteUsers.has(c.id)) remoteUsers.set(c.id, { ...remoteUsers.get(c.id), ...c });
+      updateParticipants();
       break;
     }
 
@@ -610,8 +619,8 @@ function animatePlayhead() {
 
   // Auto-scroll
   const area = document.getElementById('timelineArea');
-  if (px - area.scrollLeft > area.clientWidth * 0.75) {
-    area.scrollLeft = px - area.clientWidth * 0.3;
+  if (px - area.scrollLeft > area.userWidth * 0.75) {
+    area.scrollLeft = px - area.userWidth * 0.3;
   }
 
   if (appState.isPlaying) animFrameId = requestAnimationFrame(animatePlayhead);
@@ -621,9 +630,9 @@ function animatePlayhead() {
   updateRemoteCursor(): actualiza la línea vertical del cursor
   de otro participante en la línea temporal.
 */
-function updateRemoteCursor(clientId, beat, color) {
+function updateRemoteCursor(userId, beat, color) {
   const container = document.getElementById('tracksContainer');
-  let entry = remoteCursors.get(clientId);
+  let entry = remoteCursors.get(userId);
 
   if (!entry) {
     // Crear el elemento del cursor
@@ -633,12 +642,12 @@ function updateRemoteCursor(clientId, beat, color) {
     const label = document.createElement('div');
     label.className = 'remote-cursor-label';
     label.style.color = color || '#fff';
-    const client = remoteClients.get(clientId);
-    label.textContent = client?.name?.slice(0, 8) || '?';
+    const user = remoteUsers.get(userId);
+    label.textContent = user?.name?.slice(0, 8) || '?';
     el.appendChild(label);
     container.appendChild(el);
     entry = { beat: 0, element: el };
-    remoteCursors.set(clientId, entry);
+    remoteCursors.set(userId, entry);
   }
 
   entry.beat = beat;
@@ -658,7 +667,7 @@ function renderTrackPanel() {
   const list = document.getElementById('trackList');
   list.innerHTML = '';
   for (const t of appState.tracks) {
-    const creator = remoteClients.get(t.createdBy) || myInfo;
+    const creator = remoteUsers.get(t.createdBy) || myInfo;
     const el = document.createElement('div');
     el.className = 'track-item';
     el.style.setProperty('--track-color', t.color);
@@ -740,9 +749,9 @@ function renderTrackRows() {
     row.addEventListener('click', async (e) => {
       if (e.target.closest('.clip')) return;
       await ensureAudio();
-      const rect = row.getBoundingClientRect();
+      const rect = row.getBoundingUserRect();
       const area = document.getElementById('timelineArea');
-      const relX = e.clientX - rect.left + area.scrollLeft;
+      const relX = e.userX - rect.left + area.scrollLeft;
       const beat = snapToGrid(relX / appState.pixelsPerBeat);
       addClipLocal(t.id, beat, 4, null, `clip`);
     });
@@ -755,7 +764,7 @@ function renderTrackRows() {
   }
 
   // Restaurar cursores remotos
-  for (const [clientId, entry] of remoteCursors) {
+  for (const [userId, entry] of remoteCursors) {
     container.appendChild(entry.element);
   }
 
@@ -775,7 +784,7 @@ function buildClipElement(clip, track) {
   el.style.background = track.color + 'a0';
 
   // Color del creador en el borde inferior del clip
-  const creator = remoteClients.get(clip.createdBy) || myInfo;
+  const creator = remoteUsers.get(clip.createdBy) || myInfo;
   el.style.setProperty('--creator-color', creator?.color || track.color);
   el.style.cssText += `--creator-color:${creator?.color||track.color}`;
   el.style.borderBottom = `2px solid ${creator?.color || track.color}`;
@@ -818,13 +827,13 @@ function makeDraggable(el, clip) {
     e.stopPropagation();
     isResizing = !!e.target.dataset.resize;
     isDragging = !isResizing;
-    startX     = e.clientX;
+    startX     = e.userX;
     origStart  = clip.startBeat;
     origDur    = clip.durationBeats;
     el.classList.add('dragging');
 
     const onMove = (e) => {
-      const dBeat = (e.clientX - startX) / appState.pixelsPerBeat;
+      const dBeat = (e.userX - startX) / appState.pixelsPerBeat;
       if (isDragging) {
         const ns = Math.max(0, origStart + dBeat);
         clip.startBeat = ns;
@@ -873,19 +882,19 @@ function updateParticipants() {
   }
 
   // Los demás
-  for (const [, client] of remoteClients) {
-    if (client.id === myInfo?.id) continue;
-    list.appendChild(makeAvatar(client, false));
+  for (const [, user] of remoteUsers) {
+    if (user.id === myInfo?.id) continue;
+    list.appendChild(makeAvatar(user, false));
   }
 }
 
-function makeAvatar(client, isMe) {
+function makeAvatar(user, isMe) {
   const div = document.createElement('div');
   div.className = 'avatar' + (isMe ? ' you' : '');
-  div.style.background = client.color;
+  div.style.background = user.color;
   div.style.color      = '#000';
-  div.title            = client.name + (isMe ? ' (tú)' : '');
-  div.textContent      = client.name.slice(0, 2).toUpperCase();
+  div.title            = user.name + (isMe ? ' (tú)' : '');
+  div.textContent      = user.name.slice(0, 2).toUpperCase();
   return div;
 }
 
@@ -910,7 +919,7 @@ function notify(text, color = null) {
 function drawRuler() {
   const canvas = document.getElementById('rulerCanvas');
   const area   = document.getElementById('timelineArea');
-  const width  = Math.max(area.clientWidth, appState.totalBeats * appState.pixelsPerBeat + 200);
+  const width  = Math.max(area.userWidth, appState.totalBeats * appState.pixelsPerBeat + 200);
   canvas.width = width; canvas.height = 40;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, width, 40);
@@ -960,10 +969,10 @@ function updateStatusBar(seconds = 0, beats = 0) {
   document.getElementById('posDisplay').textContent   = `${min}:${sec}`;
   document.getElementById('beatsDisplay').textContent = `${bar}.${beat}.1`;
   document.getElementById('statusText').textContent   = appState.isPlaying ? '▶ reproduciendo' : '■ detenido';
-  document.getElementById('clipCountDisplay').textContent = `${appState.clips.length} clips · ${clients_count()} participantes`;
+  document.getElementById('clipCountDisplay').textContent = `${appState.clips.length} clips · ${usersCount()} participantes`;
 }
 
-function clients_count() { return remoteClients.size + (myInfo ? 1 : 0); }
+function usersCount() { return remoteUsers.size + (myInfo ? 1 : 0); }
 
 function updateTransportUI() {
   const btn = document.getElementById('btnPlay');

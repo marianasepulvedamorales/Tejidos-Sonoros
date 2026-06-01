@@ -57,11 +57,11 @@ const serverState = {
 };
 
 // Mapa de usuario conectados: ws → { id, name, color }
-const clients = new Map();
-let nextClientId = 1;
+const users = new Map();
+let nextUserId = 1;
 
 // Colores asignados a cada participante (para identificación visual)
-const CLIENT_COLORS = [
+const USER_COLORS = [
   '#7c6af7','#f76ac3','#4ad8b0','#f7a24a',
   '#4ab8f7','#f76a6a','#a2f74a','#c86af7',
   '#f7d84a','#4af7c8','#f74a7c','#7af74a'
@@ -121,28 +121,28 @@ const wss = new WebSocket.Server({
 
 wss.on('connection', (ws) => {
   // Asignar identidad al nuevo cliente
-  const clientId    = nextClientId++;
-  const clientColor = CLIENT_COLORS[(clientId - 1) % CLIENT_COLORS.length];
-  const clientInfo  = { id: clientId, name: `participante ${clientId}`, color: clientColor };
-  clients.set(ws, clientInfo);
+  const userId    = nextUserId++;
+  const userColor = USER_COLORS[(userId - 1) % USER_COLORS.length];
+  const userInfo  = { id: userId, name: `participante ${userId}`, color: userColor };
+  users.set(ws, userInfo);
 
-  console.log(`[+] ${clientInfo.name} conectado. Total: ${clients.size}`);
+  console.log(`[+] ${userInfo.name} conectado. Total: ${users.size}`);
 
   // ── 1. Enviar estado completo al cliente que acaba de entrar ──
   //    Esto sincroniza al recién llegado con todo lo que ya existe
   send(ws, {
     type:    'FULL_STATE',
     state:   serverState,
-    you:     clientInfo,
+    you:     userInfo,
     // Lista de participantes actuales (sin los ws, solo metadatos)
-    clients: Array.from(clients.values()),
+    users: Array.from(users.values()),
   });
 
   // ── 2. Notificar a todos que llegó alguien nuevo ──────────────
   broadcast({
-    type:   'CLIENT_JOINED',
-    client: clientInfo,
-    total:  clients.size,
+    type:   'USER_JOINED',
+    user: userInfo,
+    total:  users.size,
   }, ws); // excluir al recién llegado (ya sabe que llegó)
 
   // ── 3. Manejar mensajes entrantes ────────────────────────────
@@ -155,22 +155,22 @@ wss.on('connection', (ws) => {
       return;
     }
 
-    handleMessage(ws, clientInfo, msg);
+    handleMessage(ws, userInfo, msg);
   });
 
   // ── 4. Manejar desconexión ────────────────────────────────────
   ws.on('close', () => {
-    clients.delete(ws);
-    console.log(`[-] ${clientInfo.name} desconectado. Total: ${clients.size}`);
+    users.delete(ws);
+    console.log(`[-] ${userInfo.name} desconectado. Total: ${users.size}`);
     broadcast({
-      type:   'CLIENT_LEFT',
-      client: clientInfo,
-      total:  clients.size,
+      type:   'USER_LEFT',
+      user: userInfo,
+      total:  users.size,
     });
   });
 
   ws.on('error', (err) => {
-    console.error(`Error con ${clientInfo.name}:`, err.message);
+    console.error(`Error con ${userInfo.name}:`, err.message);
   });
 });
 
@@ -265,6 +265,13 @@ function handleMessage(ws, from, msg) {
       break;
     }
 
+    case 'SET_NAME': {
+      const newName = String(msg.name || '').trim().slice(0, 20);
+      if (newName) from.name = newName;
+      broadcast({ type: 'USER_UPDATED', user: { id: from.id, name: from.name, color: from.color } }, null);
+      break;
+    }
+
     case 'CURSOR': {
       // Posición del cursor en la línea temporal (en beats)
       // No guardamos en el estado — es información efímera
@@ -298,7 +305,7 @@ function send(ws, data) {
  */
 function broadcast(data, exclude) {
   const str = JSON.stringify(data);
-  for (const [ws] of clients) {
+  for (const [ws] of users) {
     if (ws !== exclude && ws.readyState === WebSocket.OPEN) {
       ws.send(str);
     }

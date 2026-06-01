@@ -74,8 +74,7 @@
 
     /* ── Avatares de participantes ────────────────────── */
     /*
-      Cada persona conectada tiene un círculo de color con sus
-      iniciales. Aparece y desaparece en tiempo real según las
+      Cada persona conectada tiene un círculo de color. Aparece y desaparece en tiempo real según las
       conexiones.
     */
     .participants {
@@ -100,7 +99,7 @@
     .avatar:hover { transform: scale(1.15); }
     .avatar.you { border-color: rgba(255,255,255,0.6); }
 
-    /* ── Transporte ───────────────────────────────────── */
+    /* ── Transport reactivo ───────────────────────────────────── */
     .transport {
       display: flex;
       align-items: center;
@@ -144,13 +143,16 @@
       background: var(--surface);
       border-right: 1px solid var(--border);
       overflow-y: auto;
-      padding-top: 28px;
     }
     .add-bar {
       display: flex;
       gap: 6px;
       padding: 8px 10px;
       border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: var(--surface);
     }
     .add-bar input[type=file] { display: none; }
 
@@ -227,7 +229,7 @@
       position: relative;
     }
     .ruler {
-      height: 28px;
+      height: 40px;
       background: var(--surface);
       border-bottom: 1px solid var(--border);
       position: sticky;
@@ -235,7 +237,7 @@
       z-index: 10;
       overflow: hidden;
     }
-    #rulerCanvas { width: 100%; height: 28px; display: block; }
+    #rulerCanvas { width: 100%; height: 40px; display: block; }
 
     .tracks-container {
       position: relative;

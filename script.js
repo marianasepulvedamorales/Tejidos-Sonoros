@@ -911,9 +911,9 @@ function drawRuler() {
   const canvas = document.getElementById('rulerCanvas');
   const area   = document.getElementById('timelineArea');
   const width  = Math.max(area.clientWidth, appState.totalBeats * appState.pixelsPerBeat + 200);
-  canvas.width = width; canvas.height = 28;
+  canvas.width = width; canvas.height = 40;
   const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, width, 28);
+  ctx.clearRect(0, 0, width, 40);
   ctx.font = '9px Courier New';
 
   for (let beat = 0; beat <= appState.totalBeats; beat++) {
@@ -921,10 +921,10 @@ function drawRuler() {
     const isBar = beat % 4 === 0;
     ctx.strokeStyle = isBar ? '#3a3a4a' : '#2a2a38';
     ctx.lineWidth   = isBar ? 1 : 0.5;
-    ctx.beginPath(); ctx.moveTo(x, isBar ? 0 : 14); ctx.lineTo(x, 28); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, isBar ? 0 : 22); ctx.lineTo(x, 40); ctx.stroke();
     if (isBar) {
       ctx.fillStyle = '#8a8899';
-      ctx.fillText(`${beat / 4 + 1}`, x + 3, 10);
+      ctx.fillText(`${beat / 4 + 1}`, x + 3, 14);
     }
   }
 }

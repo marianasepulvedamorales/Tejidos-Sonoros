@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Secuenciador Polifónico Colectivo</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="connect-dialog">
+  <div class="dialog-box">
+    <h2>∿ unirse a la sesión</h2>
+    <div class="field">
+      <label>Tu nombre (o alias)</label>
+      <input type="text" id="inputName" placeholder="participante" maxlength="20" />
+    </div>
+    <div class="field">
+      <label>URL del servidor WebSocket</label>
+      <input type="text" id="inputServer"
+             placeholder="ws://localhost:8080"
+             value="ws://localhost:8080" />
+    </div>
+    <p class="dialog-note">
+      El servidor es el archivo <code>server.js</code> corriendo en Node.js.
+      Comparte la URL con otros participantes para crear tu tejido.
+    </p>
+    <button class="btn" style="width:100%;justify-content:center"
+            onclick="connectToServer()">
+      CONECTAR Y ENTRAR
+    </button>
+  </div>
+</div>
+
+<header>
+  <h1>∿ Tejidos sonoros</h1>
+  <div style="display:flex;align-items:center;gap:10px">
+    <div class="conn-badge">
+      <span class="conn-dot connecting" id="connDot"></span>
+      <span id="connLabel">conectando…</span>
+    </div>
+    <div class="participants" id="participantsList"></div>
+  </div>
+  <div class="transport">
+    <div class="bpm-display">
+      <span>BPM</span>
+      <input type="range" id="bpmSlider" min="40" max="200" value="90"
+             oninput="setBPM(this.value)">
+      <span class="bpm-val" id="bpmVal">90</span>
+    </div>
+    <button class="btn" id="btnLoop" onclick="toggleLoop()">LOOP ○</button>
+    <button class="btn" id="btnStop" onclick="stopTransport()">■</button>
+    <button class="btn" id="btnPlay" onclick="togglePlay()">▶ PLAY</button>
+  </div>
+</header>
+
+<div class="workspace">
+  <div class="track-panel" id="trackPanel">
+    <div class="add-bar">
+      <button class="btn" style="flex:1;font-size:10px" onclick="addTrackLocal()">+ PISTA</button>
+      <button class="btn" style="flex:1;font-size:10px"
+              onclick="document.getElementById('fileInput').click()">↑ AUDIO</button>
+      <input type="file" id="fileInput" accept="audio/*" multiple
+             onchange="importAudio(event)">
+      <button class="btn" id="btnRec" style="flex:1;font-size:10px" onclick="toggleRecording()">⏺ REC</button>
+    </div>
+    <div id="trackList"></div>
+  </div>
+  <div class="timeline-area" id="timelineArea">
+    <div class="ruler">
+      <canvas id="rulerCanvas"></canvas>
+    </div>
+    <div class="tracks-container" id="tracksContainer">
+      <div id="playhead"></div>
+    </div>
+  </div>
+</div>
+
+<div class="statusbar">
+  <span id="posDisplay">0:00.000</span>
+  <span id="beatsDisplay">1.1.1</span>
+  <span id="statusText">detenido</span>
+  <span id="clipCountDisplay">0 clips</span>
+  <span id="uploadProgress" style="color:var(--accent)"></span>
+</div>
+
+<div id="notifications"></div>
+
+<script src="script.js"></script>
+</body>
+</html>

@@ -272,7 +272,7 @@ async function handleServerMessage(msg) {
       break;
     }
 
-    // ── Transporte remoto ────────────────────────────────
+    // ── Transport remoto ────────────────────────────────
     case 'TRANSPORT': {
       // Opcional: sincronizar play/stop con otros participantes
       // Por ahora solo notificamos, sin forzar reproducción
@@ -398,11 +398,11 @@ function removeTrackLocal(id) {
 }
 
 function updateTrackLocal(id, updates) {
-  // Aplicar localmente de inmediato para respuesta instantánea
   const t = appState.tracks.find(t => t.id === id);
   if (t) {
     Object.assign(t, updates);
     applyTrackAudio(t);
+    if ('muted' in updates || 'soloed' in updates) renderTrackPanel();
   }
   sendWS({ type: 'UPDATE_TRACK', trackId: id, updates });
 }

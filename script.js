@@ -749,9 +749,9 @@ function renderTrackRows() {
     row.addEventListener('click', async (e) => {
       if (e.target.closest('.clip')) return;
       await ensureAudio();
-      const rect = row.getBoundingUserRect();
+      const rect = row.getBoundingClientRect();
       const area = document.getElementById('timelineArea');
-      const relX = e.userX - rect.left + area.scrollLeft;
+      const relX = e.clientX - rect.left + area.scrollLeft;
       const beat = snapToGrid(relX / appState.pixelsPerBeat);
       addClipLocal(t.id, beat, 4, null, `clip`);
     });
@@ -827,13 +827,13 @@ function makeDraggable(el, clip) {
     e.stopPropagation();
     isResizing = !!e.target.dataset.resize;
     isDragging = !isResizing;
-    startX     = e.userX;
+    startX     = e.clientX;
     origStart  = clip.startBeat;
     origDur    = clip.durationBeats;
     el.classList.add('dragging');
 
     const onMove = (e) => {
-      const dBeat = (e.userX - startX) / appState.pixelsPerBeat;
+      const dBeat = (e.clientX - startX) / appState.pixelsPerBeat;
       if (isDragging) {
         const ns = Math.max(0, origStart + dBeat);
         clip.startBeat = ns;

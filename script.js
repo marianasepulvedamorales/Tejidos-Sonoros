@@ -263,6 +263,23 @@ async function handleServerMessage(msg) {
       break;
     }
 
+    // ── Clip recortado por la izquierda ──────────────────
+    case 'TRIM_CLIP': {
+      const c = appState.clips.find(c => c.id === msg.clipId);
+      if (c) {
+        c.startBeat    = msg.startBeat;
+        c.durationBeats = msg.durationBeats;
+        c.audioOffset  = msg.audioOffset;
+        const el = document.querySelector(`[data-clip-id="${msg.clipId}"]`);
+        if (el) {
+          el.style.left  = (msg.startBeat * appState.pixelsPerBeat) + 'px';
+          el.style.width = Math.max(20, msg.durationBeats * appState.pixelsPerBeat) + 'px';
+          el.classList.toggle('trimmed', msg.audioOffset > 0);
+        }
+      }
+      break;
+    }
+
     // ── BPM cambiado ─────────────────────────────────────
     case 'SET_BPM': {
       appState.bpm = msg.bpm;
@@ -573,8 +590,9 @@ function playClipAtTime(clip, time) {
   if (clip.type === 'audio') {
     const buf = audioBuffers.get(clip.id);
     if (!buf) return;
+    const offsetSec = ((clip.audioOffset || 0) / appState.bpm) * 60;
     const player = new Tone.Player(buf).connect(track._dist || track._channel);
-    player.start(time);
+    player.start(time, offsetSec);
     markClipPlaying(clip.id, true);
     setTimeout(() => {
       player.stop(); player.dispose();
@@ -789,7 +807,10 @@ function buildClipElement(clip, track) {
   el.style.cssText += `--creator-color:${creator?.color||track.color}`;
   el.style.borderBottom = `2px solid ${creator?.color || track.color}`;
 
+  if (clip.audioOffset > 0) el.classList.add('trimmed');
+
   el.innerHTML = `
+    <div class="clip-trim"  data-trim="true"></div>
     <div class="clip-name">${escHtml(clip.name)}</div>
     <div class="clip-type">${clip.type === 'audio' ? '♪ audio' : '∿ synth'}</div>
     <div class="clip-resize" data-resize="true"></div>
@@ -800,7 +821,7 @@ function buildClipElement(clip, track) {
     const waveCanvas = document.createElement('canvas');
     waveCanvas.className = 'clip-wave';
     el.appendChild(waveCanvas);
-    requestAnimationFrame(() => drawWaveform(waveCanvas, audioBuffers.get(clip.id), track.color));
+    requestAnimationFrame(() => drawWaveform(waveCanvas, audioBuffers.get(clip.id), track.color, clip.audioOffset || 0));
   }
 
   makeDraggable(el, clip);
@@ -819,17 +840,19 @@ function buildClipElement(clip, track) {
   el estado directamente.
 */
 function makeDraggable(el, clip) {
-  let isDragging = false, isResizing = false;
-  let startX = 0, origStart = 0, origDur = 0;
+  let isDragging = false, isResizing = false, isTrimming = false;
+  let startX = 0, origStart = 0, origDur = 0, origOffset = 0;
 
   el.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
     e.stopPropagation();
-    isResizing = !!e.target.dataset.resize;
-    isDragging = !isResizing;
+    isTrimming = !!e.target.dataset.trim;
+    isResizing = !isTrimming && !!e.target.dataset.resize;
+    isDragging = !isResizing && !isTrimming;
     startX     = e.clientX;
     origStart  = clip.startBeat;
     origDur    = clip.durationBeats;
+    origOffset = clip.audioOffset || 0;
     el.classList.add('dragging');
 
     const onMove = (e) => {
@@ -838,10 +861,21 @@ function makeDraggable(el, clip) {
         const ns = Math.max(0, origStart + dBeat);
         clip.startBeat = ns;
         el.style.left  = (ns * appState.pixelsPerBeat) + 'px';
-      } else {
+      } else if (isResizing) {
         const nd = Math.max(0.25, origDur + dBeat);
         clip.durationBeats = nd;
         el.style.width = Math.max(20, nd * appState.pixelsPerBeat) + 'px';
+      } else if (isTrimming) {
+        // Al recortar por la izquierda: audioOffset sube, startBeat avanza, durationBeats baja
+        const newOffset = Math.max(0, origOffset + dBeat);
+        const delta     = newOffset - origOffset;
+        const newDur    = Math.max(0.25, origDur - delta);
+        const applied   = origDur - newDur; // delta real tras clampear
+        clip.audioOffset   = origOffset + applied;
+        clip.startBeat     = origStart  + applied;
+        clip.durationBeats = newDur;
+        el.style.left  = (clip.startBeat * appState.pixelsPerBeat) + 'px';
+        el.style.width = Math.max(20, newDur * appState.pixelsPerBeat) + 'px';
       }
     };
 
@@ -850,17 +884,25 @@ function makeDraggable(el, clip) {
         clip.startBeat = snapToGrid(clip.startBeat);
         el.style.left  = (clip.startBeat * appState.pixelsPerBeat) + 'px';
         sendWS({ type: 'MOVE_CLIP', clipId: clip.id, startBeat: clip.startBeat });
-      } else {
+      } else if (isResizing) {
         clip.durationBeats = snapToGrid(clip.durationBeats);
         el.style.width = Math.max(20, clip.durationBeats * appState.pixelsPerBeat) + 'px';
         sendWS({ type: 'RESIZE_CLIP', clipId: clip.id, durationBeats: clip.durationBeats });
+      } else if (isTrimming) {
+        clip.audioOffset   = snapToGrid(clip.audioOffset);
+        clip.startBeat     = snapToGrid(clip.startBeat);
+        clip.durationBeats = snapToGrid(clip.durationBeats);
+        el.style.left  = (clip.startBeat * appState.pixelsPerBeat) + 'px';
+        el.style.width = Math.max(20, clip.durationBeats * appState.pixelsPerBeat) + 'px';
+        el.classList.toggle('trimmed', clip.audioOffset > 0);
+        sendWS({ type: 'TRIM_CLIP', clipId: clip.id,
+                 startBeat: clip.startBeat, durationBeats: clip.durationBeats,
+                 audioOffset: clip.audioOffset });
       }
-      isDragging = false; isResizing = false;
+      isDragging = false; isResizing = false; isTrimming = false;
       el.classList.remove('dragging');
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup',   onUp);
-      // Bloquear el click que el navegador dispara justo después del mouseup
-      // para evitar que aterrice en la fila y cree un clip extra
       const suppressClick = (e) => {
         e.stopPropagation();
         document.removeEventListener('click', suppressClick, true);
@@ -945,17 +987,19 @@ function drawRuler() {
   }
 }
 
-function drawWaveform(canvas, buffer, color) {
+function drawWaveform(canvas, buffer, color, offsetBeats = 0) {
   if (!buffer || !canvas.offsetWidth) return;
   canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight;
   const ctx  = canvas.getContext('2d');
   const data = buffer.getChannelData(0);
   const w    = canvas.width, h = canvas.height;
-  const step = Math.floor(data.length / w);
+  const offsetSamples = Math.floor((offsetBeats / appState.bpm) * 60 * buffer.sampleRate);
+  const available     = data.length - offsetSamples;
+  const step = Math.max(1, Math.floor(available / w));
   ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.beginPath();
   for (let i = 0; i < w; i++) {
     let min = 1, max = -1;
-    for (let j = 0; j < step; j++) { const s = data[i*step+j]||0; if(s<min)min=s; if(s>max)max=s; }
+    for (let j = 0; j < step; j++) { const s = data[offsetSamples + i*step+j]||0; if(s<min)min=s; if(s>max)max=s; }
     ctx.moveTo(i, (1-max)/2*h); ctx.lineTo(i, (1-min)/2*h);
   }
   ctx.stroke();

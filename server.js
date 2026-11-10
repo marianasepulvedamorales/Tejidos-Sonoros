@@ -252,6 +252,13 @@ function handleMessage(ws, from, msg) {
       break;
     }
 
+    case 'TRIM_CLIP': {
+      const c = serverState.clips.find(c => c.id === msg.clipId);
+      if (c) { c.startBeat = msg.startBeat; c.durationBeats = msg.durationBeats; c.audioOffset = msg.audioOffset; }
+      broadcast({ type: 'TRIM_CLIP', clipId: msg.clipId, startBeat: msg.startBeat, durationBeats: msg.durationBeats, audioOffset: msg.audioOffset, from: from.id }, ws);
+      break;
+    }
+
     case 'SET_BPM': {
       serverState.bpm = msg.bpm;
       broadcast({ type: 'SET_BPM', bpm: msg.bpm, from: from.id }, ws);

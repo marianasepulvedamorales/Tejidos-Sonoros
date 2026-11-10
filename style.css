@@ -289,6 +289,8 @@
     .clip-name { font-size: 9px; letter-spacing: 0.03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: rgba(255,255,255,0.9); font-weight: 600; }
     .clip-type { font-size: 8px; color: rgba(255,255,255,0.45); }
     .clip-resize { position: absolute; right:0; top:0; bottom:0; width:8px; cursor:ew-resize; background: linear-gradient(90deg,transparent,rgba(255,255,255,0.1)); }
+    .clip-trim  { position: absolute; left:0;  top:0; bottom:0; width:8px; cursor:ew-resize; background: linear-gradient(270deg,transparent,rgba(255,255,255,0.1)); }
+    .clip.trimmed::before { content:''; position:absolute; left:0; top:0; bottom:0; width:2px; background:rgba(255,255,255,0.5); border-radius:2px 0 0 2px; }
     canvas.clip-wave { position: absolute; bottom:0; left:0; width:100%; height:50%; pointer-events: none; opacity:0.35; }
 
     /* ── Cursores remotos ─────────────────────────────── */

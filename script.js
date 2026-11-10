@@ -38,7 +38,7 @@ const audioBuffers = new Map();
 
 // Otros participantes y sus cursores
 const remoteCursors = new Map();  // clientId → { beat, element }
-const remoteClients = new Map();  // clientId → { id, name, color }
+const remoteUsers = new Map();  // clientId → { id, name, color }
 
 let nextLocalTrackId = 1000; // IDs locales temporales antes de confirmar con servidor
 let nextLocalClipId  = 1000;
@@ -131,8 +131,8 @@ async function handleServerMessage(msg) {
       myInfo = msg.you;
 
       // Reconstruir la lista de participantes conocidos
-      for (const c of msg.clients) {
-        remoteClients.set(c.id, c);
+      for (const c of msg.users) {
+        remoteUsers.set(c.id, c);
       }
 
       // Aplicar BPM
@@ -163,22 +163,22 @@ async function handleServerMessage(msg) {
     }
 
     // ── Nuevo participante ───────────────────────────────
-    case 'CLIENT_JOINED': {
-      remoteClients.set(msg.client.id, msg.client);
+    case 'USER_JOINED': {
+      remoteUsers.set(msg.user.id, msg.user);
       updateParticipants();
-      notify(`→ ${msg.client.name} se unió`, msg.client.color);
+      notify(`→ ${msg.user.name} se unió`, msg.user.color);
       break;
     }
 
     // ── Participante se fue ──────────────────────────────
-    case 'CLIENT_LEFT': {
-      remoteClients.delete(msg.client.id);
+    case 'USER_LEFT': {
+      remoteUsers.delete(msg.user.id);
       // Eliminar su cursor de la línea temporal
-      const cursor = remoteCursors.get(msg.client.id);
+      const cursor = remoteCursors.get(msg.user.id);
       if (cursor && cursor.element) cursor.element.remove();
-      remoteCursors.delete(msg.client.id);
+      remoteCursors.delete(msg.user.id);
       updateParticipants();
-      notify(`← ${msg.client.name} salió`, '#888');
+      notify(`← ${msg.user.name} salió`, '#888');
       break;
     }
 
@@ -188,7 +188,7 @@ async function handleServerMessage(msg) {
       await initTrackAudio(msg.track);
       renderAll();
       if (msg.from !== myInfo?.id) {
-        const creator = remoteClients.get(msg.from);
+        const creator = remoteUsers.get(msg.from);
         notify(`♩ ${creator?.name || '?'} añadió "${msg.track.name}"`, msg.track.color);
       }
       break;
@@ -225,7 +225,7 @@ async function handleServerMessage(msg) {
       renderTrackRows();
       updateStatusBar();
       if (msg.from !== myInfo?.id) {
-        const creator = remoteClients.get(msg.from);
+        const creator = remoteUsers.get(msg.from);
         notify(`♪ ${creator?.name || '?'} subió "${msg.clip.name}"`, TRACK_COLORS[msg.from % TRACK_COLORS.length]);
       }
       break;
@@ -276,7 +276,7 @@ async function handleServerMessage(msg) {
     case 'TRANSPORT': {
       // Opcional: sincronizar play/stop con otros participantes
       // Por ahora solo notificamos, sin forzar reproducción
-      const creator = remoteClients.get(msg.from);
+      const creator = remoteUsers.get(msg.from);
       if (msg.from !== myInfo?.id) {
         notify(`${creator?.name || '?'} ${msg.action === 'play' ? '▶' : '■'}`, '#888');
       }
@@ -284,10 +284,10 @@ async function handleServerMessage(msg) {
     }
 
     // ── Nombre/color de participante actualizado ─────────
-    case 'CLIENT_UPDATED': {
-      const c = msg.client;
+    case 'USER_UPDATED': {
+      const c = msg.user;
       if (myInfo && c.id === myInfo.id) myInfo = { ...myInfo, ...c };
-      if (remoteClients.has(c.id)) remoteClients.set(c.id, { ...remoteClients.get(c.id), ...c });
+      if (remoteUsers.has(c.id)) remoteUsers.set(c.id, { ...remoteUsers.get(c.id), ...c });
       updateParticipants();
       break;
     }
@@ -642,7 +642,7 @@ function updateRemoteCursor(clientId, beat, color) {
     const label = document.createElement('div');
     label.className = 'remote-cursor-label';
     label.style.color = color || '#fff';
-    const client = remoteClients.get(clientId);
+    const client = remoteUsers.get(clientId);
     label.textContent = client?.name?.slice(0, 8) || '?';
     el.appendChild(label);
     container.appendChild(el);
@@ -667,7 +667,7 @@ function renderTrackPanel() {
   const list = document.getElementById('trackList');
   list.innerHTML = '';
   for (const t of appState.tracks) {
-    const creator = remoteClients.get(t.createdBy) || myInfo;
+    const creator = remoteUsers.get(t.createdBy) || myInfo;
     const el = document.createElement('div');
     el.className = 'track-item';
     el.style.setProperty('--track-color', t.color);
@@ -784,7 +784,7 @@ function buildClipElement(clip, track) {
   el.style.background = track.color + 'a0';
 
   // Color del creador en el borde inferior del clip
-  const creator = remoteClients.get(clip.createdBy) || myInfo;
+  const creator = remoteUsers.get(clip.createdBy) || myInfo;
   el.style.setProperty('--creator-color', creator?.color || track.color);
   el.style.cssText += `--creator-color:${creator?.color||track.color}`;
   el.style.borderBottom = `2px solid ${creator?.color || track.color}`;
@@ -859,6 +859,13 @@ function makeDraggable(el, clip) {
       el.classList.remove('dragging');
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup',   onUp);
+      // Bloquear el click que el navegador dispara justo después del mouseup
+      // para evitar que aterrice en la fila y cree un clip extra
+      const suppressClick = (e) => {
+        e.stopPropagation();
+        document.removeEventListener('click', suppressClick, true);
+      };
+      document.addEventListener('click', suppressClick, true);
       if (appState.isPlaying) scheduleAllClips();
     };
 
@@ -882,7 +889,7 @@ function updateParticipants() {
   }
 
   // Los demás
-  for (const [, client] of remoteClients) {
+  for (const [, user] of remoteUsers) {
     if (client.id === myInfo?.id) continue;
     list.appendChild(makeAvatar(client, false));
   }

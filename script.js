@@ -969,10 +969,10 @@ function updateStatusBar(seconds = 0, beats = 0) {
   document.getElementById('posDisplay').textContent   = `${min}:${sec}`;
   document.getElementById('beatsDisplay').textContent = `${bar}.${beat}.1`;
   document.getElementById('statusText').textContent   = appState.isPlaying ? '▶ reproduciendo' : '■ detenido';
-  document.getElementById('clipCountDisplay').textContent = `${appState.clips.length} clips · ${clients_count()} participantes`;
+  document.getElementById('clipCountDisplay').textContent = `${appState.clips.length} clips · ${usersCount()} participantes`;
 }
 
-function clients_count() { return remoteClients.size + (myInfo ? 1 : 0); }
+function usersCount() { return remoteUsers.size + (myInfo ? 1 : 0); }
 
 function updateTransportUI() {
   const btn = document.getElementById('btnPlay');
@@ -996,9 +996,10 @@ function syncScrollListeners() {
 //  GRABACIÓN DE MICRÓFONO
 // ══════════════════════════════════════════════════════════
 
-let mediaRecorder   = null;
-let recordingChunks = [];
-let isRecording     = false;
+let mediaRecorder    = null;
+let recordingChunks  = [];
+let isRecording      = false;
+let recordingStartBeat = 0;
 
 async function toggleRecording() {
   if (isRecording) {
@@ -1047,7 +1048,7 @@ async function toggleRecording() {
       addTrackLocal(trackName);
       setTimeout(() => {
         const track = appState.tracks.find(t => t.name === trackName);
-        if (track) addClipLocal(track.id, 0, durationBeats, base64, trackName);
+        if (track) addClipLocal(track.id, recordingStartBeat, durationBeats, base64, trackName);
       }, 200);
 
       notify('⏺ grabación guardada', '#4ad8b0');
@@ -1060,6 +1061,7 @@ async function toggleRecording() {
     updateRecBtn();
   };
 
+  recordingStartBeat = audioInitialized ? Tone.Transport.seconds * (appState.bpm / 60) : 0;
   mediaRecorder.start();
   isRecording = true;
   updateRecBtn();

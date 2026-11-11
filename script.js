@@ -566,6 +566,28 @@ async function stopTransport() {
   updateStatusBar();
 }
 
+async function seekTo(beat) {
+  await ensureAudio();
+  beat = Math.max(0, beat);
+  const seconds    = beat / (appState.bpm / 60);
+  const wasPlaying = appState.isPlaying;
+
+  if (wasPlaying) {
+    Tone.Transport.pause();
+    cancelAnimationFrame(animFrameId);
+  }
+
+  Tone.Transport.seconds = seconds;
+  document.getElementById('playhead').style.left = (beat * appState.pixelsPerBeat) + 'px';
+  updateStatusBar(seconds, beat);
+
+  if (wasPlaying) {
+    scheduleAllClips();
+    Tone.Transport.start();
+    animatePlayhead();
+  }
+}
+
 function toggleLoop() {
   appState.loopActive = !appState.loopActive;
   if (appState.loopActive) {
@@ -1182,6 +1204,53 @@ document.addEventListener('keydown', async (e) => {
   if (e.target.tagName === 'INPUT') return;
   if (e.code === 'Space') { e.preventDefault(); await togglePlay(); }
   if (e.code === 'Escape') { await stopTransport(); }
+});
+
+// Clic en la regla → seek
+document.getElementById('rulerCanvas').addEventListener('click', async (e) => {
+  const area = document.getElementById('timelineArea');
+  const rect = e.currentTarget.getBoundingClientRect();
+  const beat = (e.clientX - rect.left + area.scrollLeft) / appState.pixelsPerBeat;
+  await seekTo(beat);
+});
+
+// Arrastre del playhead → seek en tiempo real
+document.getElementById('playhead').addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return;
+  e.stopPropagation();
+  const area       = document.getElementById('timelineArea');
+  const wasPlaying = appState.isPlaying;
+
+  if (wasPlaying) {
+    Tone.Transport.pause();
+    cancelAnimationFrame(animFrameId);
+    appState.isPlaying = false;
+    updateTransportUI();
+  }
+
+  const onMove = (e) => {
+    const rect  = area.getBoundingClientRect();
+    const beat  = Math.max(0, (e.clientX - rect.left + area.scrollLeft) / appState.pixelsPerBeat);
+    const secs  = beat / (appState.bpm / 60);
+    Tone.Transport.seconds = secs;
+    document.getElementById('playhead').style.left = (beat * appState.pixelsPerBeat) + 'px';
+    updateStatusBar(secs, beat);
+  };
+
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup',   onUp);
+    if (wasPlaying) {
+      scheduleAllClips();
+      Tone.Transport.start();
+      appState.isPlaying = true;
+      animatePlayhead();
+      updateTransportUI();
+    }
+  };
+
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup',   onUp);
 });
 
 window.addEventListener('resize', drawRuler);

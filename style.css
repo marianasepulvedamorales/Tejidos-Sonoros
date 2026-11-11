@@ -237,7 +237,7 @@
       z-index: 10;
       overflow: hidden;
     }
-    #rulerCanvas { width: 100%; height: 40px; display: block; }
+    #rulerCanvas { width: 100%; height: 40px; display: block; cursor: pointer; }
 
     .tracks-container {
       position: relative;
@@ -325,7 +325,8 @@
       width: 2px;
       background: var(--accent3);
       z-index: 20;
-      pointer-events: none;
+      pointer-events: auto;
+      cursor: ew-resize;
       left: 0;
       box-shadow: 0 0 6px var(--accent3);
     }

@@ -263,6 +263,29 @@ async function handleServerMessage(msg) {
       break;
     }
 
+    // ── Clip dividido en dos ─────────────────────────────
+    case 'SPLIT_CLIP': {
+      const left = appState.clips.find(c => c.id === msg.leftClipId);
+      if (left) {
+        left.durationBeats = msg.leftDuration;
+        const el = document.querySelector(`[data-clip-id="${left.id}"]`);
+        if (el) el.style.width = Math.max(20, left.durationBeats * appState.pixelsPerBeat) + 'px';
+      }
+      const right = msg.rightClip;
+      // Reusar el buffer ya decodificado si está disponible (evita re-decodificar)
+      if (!audioBuffers.has(right.id)) {
+        const sharedBuf = left ? audioBuffers.get(left.id) : null;
+        if (sharedBuf) {
+          audioBuffers.set(right.id, sharedBuf);
+        } else if (right.audioData) {
+          await decodeClipAudio(right);
+        }
+      }
+      appState.clips.push(right);
+      renderTrackRows();
+      break;
+    }
+
     // ── Clip recortado por la izquierda ──────────────────
     case 'TRIM_CLIP': {
       const c = appState.clips.find(c => c.id === msg.clipId);
@@ -825,6 +848,31 @@ function buildClipElement(clip, track) {
   }
 
   makeDraggable(el, clip);
+
+  // Línea de preview al pasar el cursor (indica dónde cortaría el split)
+  const splitLine = document.createElement('div');
+  splitLine.className = 'clip-split-preview';
+  el.appendChild(splitLine);
+  el.addEventListener('mousemove', (e) => {
+    if (e.target.dataset.trim || e.target.dataset.resize) {
+      splitLine.style.display = 'none';
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    splitLine.style.display = 'block';
+    splitLine.style.left = (e.clientX - rect.left) + 'px';
+  });
+  el.addEventListener('mouseleave', () => { splitLine.style.display = 'none'; });
+
+  el.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect      = el.getBoundingClientRect();
+    const relBeats  = (e.clientX - rect.left) / appState.pixelsPerBeat;
+    const splitBeat = snapToGrid(clip.startBeat + relBeats);
+    if (splitBeat <= clip.startBeat + 0.25 || splitBeat >= clip.startBeat + clip.durationBeats - 0.25) return;
+    sendWS({ type: 'SPLIT_CLIP', clipId: clip.id, splitBeat });
+  });
 
   el.addEventListener('dblclick', (e) => {
     e.stopPropagation();

@@ -59,6 +59,7 @@ const serverState = {
 // Mapa de usuario conectados: ws → { id, name, color }
 const clients = new Map();
 let nextClientId = 1;
+let nextServerClipId = 90000;
 
 // Colores asignados a cada participante (para identificación visual)
 const CLIENT_COLORS = [
@@ -256,6 +257,37 @@ function handleMessage(ws, from, msg) {
       const c = serverState.clips.find(c => c.id === msg.clipId);
       if (c) { c.startBeat = msg.startBeat; c.durationBeats = msg.durationBeats; c.audioOffset = msg.audioOffset; }
       broadcast({ type: 'TRIM_CLIP', clipId: msg.clipId, startBeat: msg.startBeat, durationBeats: msg.durationBeats, audioOffset: msg.audioOffset, from: from.id }, ws);
+      break;
+    }
+
+    case 'SPLIT_CLIP': {
+      const orig = serverState.clips.find(c => c.id === msg.clipId);
+      if (!orig) break;
+      const leftDur    = msg.splitBeat - orig.startBeat;
+      const rightOffset = (orig.audioOffset || 0) + leftDur;
+      const rightDur   = orig.durationBeats - leftDur;
+      if (leftDur < 0.25 || rightDur < 0.25) break;
+
+      orig.durationBeats = leftDur;
+
+      const rightClip = {
+        id:            nextServerClipId++,
+        trackId:       orig.trackId,
+        startBeat:     msg.splitBeat,
+        durationBeats: rightDur,
+        audioOffset:   rightOffset,
+        name:          orig.name,
+        type:          orig.type,
+        audioData:     orig.audioData || null,
+        createdBy:     from.id,
+      };
+      serverState.clips.push(rightClip);
+
+      broadcast({ type: 'SPLIT_CLIP',
+        leftClipId:    orig.id,
+        leftDuration:  leftDur,
+        rightClip,
+        from: from.id }, null);
       break;
     }
 

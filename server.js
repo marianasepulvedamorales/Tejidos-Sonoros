@@ -30,8 +30,7 @@
  *
  * HOSPEDAR GRATIS:
  *   - Railway.app: conecta tu repo de GitHub, detecta Node.js automáticamente
- *   - Render.com: igual, plan gratuito disponible
- *   - Fly.io: más control, también gratuito para proyectos pequeños
+ 
  * ============================================================
  */
 
@@ -358,10 +357,10 @@ httpServer.listen(PORT, () => {
   console.log(`
 ╔══════════════════════════════════════════════╗
 ║   Secuenciador Polifónico Colectivo          ║
-║   Servidor corriendo en puerto ${PORT}          ║
+║   Servidor corriendo en puerto ${PORT}       ║
 ╠══════════════════════════════════════════════╣
-║   Local:      http://localhost:${PORT}          ║
-║   WebSocket:  ws://localhost:${PORT}            ║
+║   Local:      http://localhost:${PORT}       ║
+║   WebSocket:  ws://localhost:${PORT}         ║
 ╚══════════════════════════════════════════════╝
   `);
 });

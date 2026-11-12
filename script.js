@@ -1197,6 +1197,120 @@ function updateRecBtn() {
 }
 
 // ══════════════════════════════════════════════════════════
+//  EXPORTACIÓN WAV
+// ══════════════════════════════════════════════════════════
+
+async function exportAudio() {
+  if (!appState.clips.length) { notify('⚠ no hay clips para exportar', '#f7a24a'); return; }
+
+  const btn = document.getElementById('btnExport');
+  btn.textContent = '⏳ exportando…';
+  btn.disabled = true;
+
+  try {
+    await ensureAudio();
+
+    const totalBeats  = Math.max(...appState.clips.map(c => c.startBeat + c.durationBeats));
+    const tailBeats   = 4; // margen para que el reverb se apague
+    const durationSec = (totalBeats + tailBeats) / (appState.bpm / 60);
+
+    const rendered = await Tone.Offline(async ({ transport }) => {
+      transport.bpm.value = appState.bpm;
+
+      // Crear la cadena de efectos por pista dentro del contexto offline
+      const offlineNodes = new Map();
+      for (const t of appState.tracks) {
+        if (t.muted) continue;
+        const vol = t.volume === 0 ? -Infinity : (t.volume / 100) * 66 - 60;
+        const ch  = new Tone.Channel({ volume: vol, pan: (t.pan - 50) / 50 }).toDestination();
+        const rev = new Tone.Reverb({ decay: 2.5, wet: (t.reverb || 0) / 100 });
+        await rev.ready;
+        rev.connect(ch);
+        const dly = new Tone.FeedbackDelay({ delayTime: '8n', feedback: 0.3, wet: (t.delay || 0) / 100 }).connect(rev);
+        const dst = new Tone.Distortion({ distortion: 0.6, wet: (t.dist  || 0) / 100 }).connect(dly);
+        const syn = new Tone.PolySynth(Tone.Synth, {
+          oscillator: { type: 'triangle' },
+          envelope:   { attack: 0.02, decay: 0.1, sustain: 0.5, release: 0.8 },
+          detune:     (t.detune || 0) * 100,
+        }).connect(dst);
+        offlineNodes.set(t.id, { dst, syn });
+      }
+
+      // Programar cada clip
+      for (const clip of appState.clips) {
+        const nodes     = offlineNodes.get(clip.trackId);
+        if (!nodes) continue;
+        const startSec  = clip.startBeat   / (appState.bpm / 60);
+        const offsetSec = (clip.audioOffset || 0) / (appState.bpm / 60);
+        const durSec    = clip.durationBeats / (appState.bpm / 60);
+
+        if (clip.type === 'audio') {
+          const toneBuf = audioBuffers.get(clip.id);
+          if (!toneBuf) continue;
+          const player = new Tone.Player(toneBuf.get()).connect(nodes.dst);
+          transport.schedule(time => player.start(time, offsetSec, durSec), startSec);
+        } else {
+          const notes = ['C4','E4','G4','B4'];
+          transport.schedule(time => {
+            nodes.syn.triggerAttackRelease(
+              notes.slice(0, Math.min(4, Math.ceil(clip.durationBeats))),
+              durSec * 0.9, time
+            );
+          }, startSec);
+        }
+      }
+
+      transport.start(0);
+    }, durationSec);
+
+    encodeAndDownloadWAV(rendered.get(), 'tejidos-sonoros.wav');
+    notify('✓ descarga lista', '#4ad8b0');
+  } catch(e) {
+    console.error('Error exportando:', e);
+    notify('⚠ error al exportar', '#f04f4f');
+  } finally {
+    btn.textContent = '↓ WAV';
+    btn.disabled = false;
+  }
+}
+
+function encodeAndDownloadWAV(audioBuf, filename) {
+  const numCh      = audioBuf.numberOfChannels;
+  const sampleRate = audioBuf.sampleRate;
+  const numSamples = audioBuf.length;
+  const dataBytes  = numSamples * numCh * 2; // 16-bit
+  const buf        = new ArrayBuffer(44 + dataBytes);
+  const view       = new DataView(buf);
+
+  const str = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+  str(0, 'RIFF'); view.setUint32(4, 36 + dataBytes, true);
+  str(8, 'WAVE'); str(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);               // PCM
+  view.setUint16(22, numCh, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * numCh * 2, true);
+  view.setUint16(32, numCh * 2, true);
+  view.setUint16(34, 16, true);
+  str(36, 'data'); view.setUint32(40, dataBytes, true);
+
+  let off = 44;
+  for (let i = 0; i < numSamples; i++) {
+    for (let ch = 0; ch < numCh; ch++) {
+      const s = Math.max(-1, Math.min(1, audioBuf.getChannelData(ch)[i]));
+      view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      off += 2;
+    }
+  }
+
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ══════════════════════════════════════════════════════════
 //  ATAJOS DE TECLADO
 // ══════════════════════════════════════════════════════════
 

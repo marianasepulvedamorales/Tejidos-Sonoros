@@ -360,7 +360,7 @@ httpServer.listen(PORT, () => {
 ║   Servidor corriendo en puerto ${PORT}       ║
 ╠══════════════════════════════════════════════╣
 ║   Local:      http://localhost:${PORT}       ║
-║   WebSocket:  ws://localhost:${PORT}         ║
+║   WebSocket:  https://tejidos-sonoros.up.railway.app/         ║
 ╚══════════════════════════════════════════════╝
   `);
 });

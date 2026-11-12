@@ -1368,3 +1368,8 @@ document.getElementById('playhead').addEventListener('mousedown', (e) => {
 });
 
 window.addEventListener('resize', drawRuler);
+
+// Auto-detectar la URL del WebSocket según dónde se sirve la página:
+// en local → ws://localhost:8080  |  en Railway → wss://tejidos-sonoros.up.railway.app
+document.getElementById('inputServer').value =
+  (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host;
